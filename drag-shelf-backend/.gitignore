@@ -1,0 +1,38 @@
+# Dependencies
+**/node_modules/
+
+# Next.js
+**/.next/
+**/out/
+
+# Build files
+**/dist/
+**/release/
+**/build/
+
+# Large binaries
+**/electron.zip
+**/electron.exe
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Local application data
+**/shelf-data.json
+
+# Beta invitation secrets
+beta-invites.sql
+beta-invite-codes.txt
+
+# Logs
+npm-debug.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; img-src 'self' data: blob:;"
+    >
+
+    <title>Drag Shelf</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="./styles/style.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">D</div>
+            <div class="brand-name">Drag Shelf</div>
+        </div>
+
+        <div class="sidebar-label">WORKSPACE</div>
+
+        <div class="nav-list">
+
+            <button class="nav-item active" data-view="all">
+                <span class="nav-icon">▦</span>
+                <span>All Items</span>
+            </button>
+
+            <button class="nav-item" data-view="recent">
+                <span class="nav-icon">◷</span>
+                <span>Recent</span>
+            </button>
+
+        </div>
+
+        <div class="sidebar-spacer"></div>
+
+        <div class="collection-heading">
+
+            <div class="sidebar-label">COLLECTIONS</div>
+
+            <button
+                class="add-collection"
+                id="add-collection"
+                title="Create Collection"
+            >
+                +
+            </button>
+
+        </div>
+
+        <div class="collection-list" id="collection-list"></div>
+
+        <div class="sidebar-bottom">
+            <div>Drag Shelf</div>
+            <div class="version">Version 0.3.0</div>
+        </div>
+
+    </aside>
+
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+
+        <header class="topbar">
+
+            <div class="page-title" id="page-title">
+                All Items
+            </div>
+
+            <div class="topbar-right">
+
+                <button
+                    class="icon-button"
+                    id="paste-button"
+                    title="Paste from clipboard"
+                >
+                    ↧
+                </button>
+
+                <button class="primary-button" id="add-files">
+                    <span>+</span>
+                    Add Files
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <section class="content">
+
+            <div class="welcome">
+
+                <h2 id="welcome-title">
+                    Your shelf.
+                </h2>
+
+                <p id="welcome-description">
+                    Keep your files, links and text ready whenever you need them.
+                </p>
+
+            </div>
+
+
+            <!-- SEARCH -->
+            <div class="toolbar">
+
+                <div class="search-box">
+
+                    <span>⌕</span>
+
+                    <input
+                        type="text"
+                        id="search"
+                        placeholder="Search your shelf..."
+                        autocomplete="off"
+                    >
+
+                    <kbd>Ctrl K</kbd>
+
+                </div>
+
+
+                <!-- FILTERS -->
+                <div class="filters">
+
+                    <button class="filter active" data-filter="all">
+                        All
+                    </button>
+
+                    <button class="filter" data-filter="file">
+                        Files
+                    </button>
+
+                    <button class="filter" data-filter="image">
+                        Images
+                    </button>
+
+                    <button class="filter" data-filter="document">
+                        Documents
+                    </button>
+
+                    <button class="filter" data-filter="link">
+                        Links
+                    </button>
+
+                    <button class="filter" data-filter="text">
+                        Text
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- DROP ZONE -->
+            <div class="drop-zone" id="drop-zone">
+
+                <div class="drop-zone-content">
+                    <div class="drop-icon">↓</div>
+
+                    <div>
+                        <strong>Drop anything here</strong>
+
+                        <span>
+                            Files, images, documents and links
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- ITEM SECTION -->
+            <div class="section-header">
+
+                <h3 id="list-heading">
+                    Your Items
+                </h3>
+
+                <span class="item-count" id="item-count">
+                    0 items
+                </span>
+
+            </div>
+
+
+            <!-- ITEM LIST -->
+            <div class="item-list" id="list"></div>
+
+
+            <!-- EMPTY STATE -->
+            <div
+                class="empty-state"
+                id="empty-state"
+                style="display:none;"
+            >
+
+                <div class="empty-icon">▱</div>
+
+                <h3 id="empty-title">
+                    Your shelf is empty
+                </h3>
+
+                <p id="empty-description">
+                    Add files or drop something here to get started.
+                </p>
+
+                <button
+                    class="empty-action"
+                    id="empty-add-files"
+                >
+                    + Add your first file
+                </button>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<!-- CONTEXT MENU BACKDROP -->
+<div class="menu-backdrop" id="menu-backdrop"></div>
+
+
+<!-- CONTEXT MENU -->
+<div class="context-menu" id="context-menu">
+
+    <button class="menu-option" data-action="open">
+        <span>↗</span>
+        Open
+    </button>
+
+    <button class="menu-option" data-action="reveal">
+        <span>▣</span>
+        Show in Explorer
+    </button>
+
+    <button class="menu-option" data-action="copy">
+        <span>⧉</span>
+        Copy Path / Value
+    </button>
+
+    <div class="menu-divider"></div>
+
+    <button class="menu-option" data-action="rename">
+        <span>✎</span>
+        Rename
+    </button>
+
+    <button class="menu-option" data-action="locate">
+        <span>⌖</span>
+        Locate Missing File
+    </button>
+
+    <div class="menu-divider"></div>
+
+    <button class="menu-option danger" data-action="remove">
+        <span>×</span>
+        Remove from Shelf
+    </button>
+
+</div>
+
+
+<!-- PREVIEW MODAL -->
+<div class="preview-backdrop" id="preview-backdrop">
+
+    <div class="preview-window">
+
+        <div class="preview-header">
+
+            <div class="preview-title" id="preview-title">
+                File Preview
+            </div>
+
+            <button
+                class="preview-close"
+                id="preview-close"
+                title="Close Preview"
+            >
+                ×
+            </button>
+
+        </div>
+
+        <div class="preview-body" id="preview-body">
+            <div class="preview-loading">
+                Loading preview...
+            </div>
+        </div>
+
+        <div class="preview-footer" id="preview-footer">
+
+            <button id="preview-copy">
+                Copy Path
+            </button>
+
+            <button id="preview-open">
+                Open Original
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+
+<script src="./scripts/renderer.js"></script>
+
+</body>
+</html>
