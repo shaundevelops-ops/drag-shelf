@@ -13,6 +13,7 @@ import {
   LockKeyhole,
   Mail,
   UserRound,
+  Ticket,
 } from "lucide-react";
 
 type AuthMode = "login" | "register";
@@ -23,8 +24,11 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -37,46 +41,76 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
     setSuccess("");
     setLoading(true);
 
-    try {
-      const supabase = createClient();
+    const normalizedEmail = email.trim().toLowerCase();
 
+    try {
       if (isRegister) {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: {
-            data: {
-              display_name: name.trim(),
-            },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // 1. Register using beta invitation
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password,
+            displayName: name.trim(),
+            inviteCode: inviteCode.trim().toUpperCase(),
+          }),
         });
 
-        if (error) throw error;
+        const result = await response.json();
 
-        if (data.session) {
-          router.push("/dashboard");
-          router.refresh();
-        } else {
-          setSuccess(
-            "Account created! Check your email to verify your account."
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.error || "Registration failed. Please try again."
           );
         }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password,
-        });
 
-        if (error) throw error;
+        // 2. Automatically sign in
+        const supabase = createClient();
+
+        const { error: loginError } =
+          await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+        if (loginError) {
+          setSuccess(
+            "Your account and 60-day Pro beta access have been created! Please sign in."
+          );
+
+          return;
+        }
+
+        // 3. Redirect to dashboard
+        router.push("/dashboard");
+        router.refresh();
+
+      } else {
+        // Normal login
+        const supabase = createClient();
+
+        const { error: loginError } =
+          await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+
+        if (loginError) throw loginError;
 
         router.push("/dashboard");
         router.refresh();
       }
+
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Something went wrong."
+        err instanceof Error
+          ? err.message
+          : "Something went wrong."
       );
+
     } finally {
       setLoading(false);
     }
@@ -98,20 +132,28 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         </Link>
 
         <div className="auth-heading">
-          <div className="eyebrow">YOUR WORKSPACE, CONNECTED</div>
+          <div className="eyebrow">
+            {isRegister
+              ? "EXCLUSIVE CLOSED BETA"
+              : "YOUR WORKSPACE, CONNECTED"}
+          </div>
 
           <h1>
-            {isRegister ? "Create your account." : "Welcome back."}
+            {isRegister
+              ? "Claim your workspace."
+              : "Welcome back."}
           </h1>
 
           <p>
             {isRegister
-              ? "Create your Drag Shelf account and keep your workflow organized."
+              ? "Join the Drag Shelf beta and experience your 60-day Pro access."
               : "Sign in to continue to your Drag Shelf account."}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
+
+          {/* Display Name */}
           {isRegister && (
             <label className="input-group">
               <span>Full name</span>
@@ -125,11 +167,13 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  autoComplete="name"
                 />
               </div>
             </label>
           )}
 
+          {/* Email */}
           <label className="input-group">
             <span>Email address</span>
 
@@ -142,10 +186,12 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
           </label>
 
+          {/* Password */}
           <label className="input-group">
             <span>Password</span>
 
@@ -159,6 +205,9 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={8}
                 required
+                autoComplete={
+                  isRegister ? "new-password" : "current-password"
+                }
               />
 
               <button
@@ -176,24 +225,70 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
             </div>
           </label>
 
+          {/* Beta Invitation Code */}
+          {isRegister && (
+            <label className="input-group">
+              <span>Beta invitation code</span>
+
+              <div className="input-wrapper">
+                <Ticket size={18} />
+
+                <input
+                  type="text"
+                  placeholder="DRAGSHELF-XXXXXXXXXXXXXXXX"
+                  value={inviteCode}
+                  onChange={(e) =>
+                    setInviteCode(e.target.value.toUpperCase())
+                  }
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+
+              <small className="input-hint">
+                Your exclusive invitation code is required to join.
+              </small>
+            </label>
+          )}
+
+          {/* Forgot Password */}
           {!isRegister && (
             <div className="forgot-row">
-              <Link href="/forgot-password">Forgot password?</Link>
+              <Link href="/forgot-password">
+                Forgot password?
+              </Link>
             </div>
           )}
 
-          {error && <div className="message error">{error}</div>}
-
-          {success && (
-            <div className="message success">{success}</div>
+          {/* Error */}
+          {error && (
+            <div className="message error">
+              {error}
+            </div>
           )}
 
-          <button className="submit-button" disabled={loading}>
+          {/* Success */}
+          {success && (
+            <div className="message success">
+              {success}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            className="submit-button"
+            disabled={loading}
+          >
             {loading ? (
               <Loader2 size={19} className="spin" />
             ) : (
               <>
-                {isRegister ? "Create account" : "Sign in"}
+                {isRegister
+                  ? "Claim beta access"
+                  : "Sign in"}
+
                 <ArrowRight size={18} />
               </>
             )}
@@ -201,12 +296,20 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
         </form>
 
         <div className="auth-switch">
-          {isRegister ? "Already have an account?" : "New to Drag Shelf?"}
+          {isRegister
+            ? "Already have an account?"
+            : "New to Drag Shelf?"}
 
           <Link href={isRegister ? "/login" : "/register"}>
             {isRegister ? "Sign in" : "Create account"}
           </Link>
         </div>
+
+        {isRegister && (
+          <div className="beta-notice">
+            60 DAYS OF PRO ACCESS · INVITE ONLY
+          </div>
+        )}
 
         <div className="auth-footer">
           LOCAL-FIRST. BUILT FOR YOUR WORKFLOW.

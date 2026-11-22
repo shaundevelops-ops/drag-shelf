@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-
+import { connection } from "next/server";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 import LogoutButton from "@/components/dashboard/LogoutButton";
@@ -19,9 +20,11 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
+async function DashboardContent() {
+  await connection();
 
+  const supabase = await createClient();
+  
   // Authenticate user
   const {
     data: { user },
@@ -292,5 +295,21 @@ export default async function DashboardPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="dashboard-layout">
+          <div className="dashboard-content">
+            Loading your Drag Shelf dashboard...
+          </div>
+        </main>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }

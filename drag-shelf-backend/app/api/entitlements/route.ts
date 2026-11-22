@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-
 export async function GET() {
+  await connection();
+
   try {
     const supabase = await createClient();
 
@@ -19,7 +21,30 @@ export async function GET() {
       );
     }
 
-    // 2. Fetch the user's active subscription
+    const now = new Date().toISOString();
+
+    // 2. Check active beta access
+    const { data: betaAccess, error: betaError } = await supabase
+      .from("beta_access")
+      .select("id, plan_id, status, starts_at, expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .gt("expires_at", now)
+      .or(`starts_at.is.null,starts_at.lte.${now}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (betaError) {
+      console.error("BETA ACCESS ERROR:", betaError);
+
+      return NextResponse.json(
+        { success: false, error: "Unable to verify account access" },
+        { status: 500 }
+      );
+    }
+
+    // 3. Fetch normal subscription
     const { data: subscription, error: subscriptionError } =
       await supabase
         .from("subscriptions")
@@ -42,21 +67,19 @@ export async function GET() {
       console.error("SUBSCRIPTION ERROR:", subscriptionError);
 
       return NextResponse.json(
-           {
-             success: false,
-             error: subscriptionError.message,
-             code: subscriptionError.code,
-             details: subscriptionError.details,
-             hint: subscriptionError.hint,
-           },
-           { status: 500 }
-       );
+        { success: false, error: "Unable to load subscription information" },
+        { status: 500 }
+      );
     }
 
-    // 3. Resolve the plan
-    // Fall back to Free if no active subscription exists.
-    const planId = subscription?.plan_id || "free";
+    // 4. Resolve entitlement priority
+    const isBetaUser = !!betaAccess;
 
+    const planId = isBetaUser
+      ? betaAccess.plan_id
+      : subscription?.plan_id || "free";
+
+    // 5. Fetch applicable plan
     const { data: plan, error: planError } = await supabase
       .from("plans")
       .select(`
@@ -78,7 +101,7 @@ export async function GET() {
       .single();
 
     if (planError || !plan) {
-      console.error("Plan error:", planError);
+      console.error("PLAN ERROR:", planError);
 
       return NextResponse.json(
         { success: false, error: "Plan configuration unavailable" },
@@ -86,7 +109,7 @@ export async function GET() {
       );
     }
 
-    // 4. Count activated devices
+    // 6. Count activated devices
     const { count: deviceCount, error: deviceError } =
       await supabase
         .from("devices")
@@ -95,7 +118,7 @@ export async function GET() {
         .is("revoked_at", null);
 
     if (deviceError) {
-      console.error("Device error:", deviceError);
+      console.error("DEVICE ERROR:", deviceError);
 
       return NextResponse.json(
         { success: false, error: "Unable to load device information" },
@@ -103,7 +126,7 @@ export async function GET() {
       );
     }
 
-    // 5. Prepare entitlement response
+    // 7. Prepare entitlement response
     const response = {
       success: true,
 
@@ -113,13 +136,36 @@ export async function GET() {
         displayName: user.user_metadata?.display_name || null,
       },
 
+      entitlement: {
+        source: isBetaUser ? "beta" : subscription ? "subscription" : "free",
+        isBetaUser,
+        betaExpiresAt: isBetaUser ? betaAccess.expires_at : null,
+      },
+
       subscription: {
-        id: subscription?.id || null,
-        status: subscription?.status || "active",
-        billingCycle: subscription?.billing_cycle || null,
-        currentPeriodStart: subscription?.current_period_start || null,
-        currentPeriodEnd: subscription?.current_period_end || null,
-        cancelAtPeriodEnd: subscription?.cancel_at_period_end || false,
+        id: isBetaUser
+          ? betaAccess.id
+          : subscription?.id || null,
+
+        status: isBetaUser
+          ? "active"
+          : subscription?.status || "active",
+
+        billingCycle: isBetaUser
+          ? "beta"
+          : subscription?.billing_cycle || null,
+
+        currentPeriodStart: isBetaUser
+          ? betaAccess.starts_at
+          : subscription?.current_period_start || null,
+
+        currentPeriodEnd: isBetaUser
+          ? betaAccess.expires_at
+          : subscription?.current_period_end || null,
+
+        cancelAtPeriodEnd: isBetaUser
+          ? false
+          : subscription?.cancel_at_period_end || false,
       },
 
       plan: {
@@ -155,7 +201,7 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error("Entitlements API error:", error);
+    console.error("ENTITLEMENTS API ERROR:", error);
 
     return NextResponse.json(
       { success: false, error: "Internal server error" },
